@@ -17,7 +17,7 @@
 
 ```bash
 git clone https://github.com/RohaCode/imageGenerateBot.git
-cd image-bot
+cd imageGenerateBot
 ```
 
 ### 2. Установка зависимостей
