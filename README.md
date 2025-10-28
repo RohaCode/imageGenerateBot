@@ -16,7 +16,7 @@
 ### 1. Клонирование репозитория (или скачивание файлов)
 
 ```bash
-git clone <URL_ВАШЕГО_РЕПОЗИТОРИЯ>
+git clone https://github.com/RohaCode/imageGenerateBot.git
 cd image-bot
 ```
 
