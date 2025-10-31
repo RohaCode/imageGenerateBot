@@ -55,7 +55,11 @@ def openrouter_generate(
 
     try:
         data = r.json()
+    except json.JSONDecodeError:
+        # Если не JSON, считаем что это сырые данные картинки
+        return r.content
 
+    try:
         # Неизвестная ошибка модели.
         if data.get("error"):
             error_message = data["error"].get("message", "Неизвестная ошибка модели.")
@@ -75,29 +79,40 @@ def openrouter_generate(
             finish_reason = response_message["finish_reason"]
             return f"MODEL_FINISH_REASON: {finish_reason}"
 
-        # Проверка ключа images
-        if not response_message.get("images") or not response_message["images"]:
-            if response_message.get("content"):
-                pass
-            return "NO_IMAGE_RETURNED"
+        # Обработка ответа для моделей Gemini
+        if response_message.get("images"):
+            image_url = response_message["images"][0].get("image_url", {}).get("url")
+            if image_url.startswith("http"):
+                rr = requests.get(image_url, timeout=60)
+                rr.raise_for_status()
+                return rr.content
+            elif image_url.startswith("data:image"):
+                _, b64_data = image_url.split(",", 1)
+                return base64.b64decode(b64_data)
+            else:
+                return "UNKNOWN_IMAGE_FORMAT"
 
-        image_url = response_message["images"][0].get("image_url", {}).get("url")
+        # Обработка ответа для моделей OpenAI
+        elif response_message.get("content"):
+            try:
+                # Извлекаем b64 из tool_calls
+                tool_calls = response_message.get("tool_calls", [])
+                for call in tool_calls:
+                    if call.get("function", {}).get("name") == "display_image":
+                        args = json.loads(call["function"]["arguments"])
+                        b64_data = args.get("b64_json")
+                        if b64_data:
+                            return base64.b64decode(b64_data)
+            except (json.JSONDecodeError, KeyError, IndexError):
+                return "JSON_PARSE_ERROR"
 
-        # Если ссылка - скачиваем
-        if image_url.startswith("http"):
-            rr = requests.get(image_url, timeout=60)
-            rr.raise_for_status()
-            return rr.content
-        # Если формат base64
-        elif image_url.startswith("data:image"):
-            header, b64_data = image_url.split(",", 1)
-            return base64.b64decode(b64_data)
-        else:
-            return "UNKNOWN_IMAGE_FORMAT"
+        return "NO_IMAGE_RETURNED"
 
-    except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+    except (KeyError, IndexError, TypeError):
         # Ошибка парсинга JSON
         return "JSON_PARSE_ERROR"
+    except Exception:
+        return "UNKNOWN_ERROR"
 
 
 def get_balance_sync(api_key: str) -> Optional[str]:
